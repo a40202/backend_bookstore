@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  customer
+  admin
+  staff
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  shipping
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  transfer
+}
+
+enum ReturnStatus {
+  pending
+  approved
+  rejected
+  received
+  refunded
+  cancelled
+}
+
+enum ReturnReason {
+  defective
+  wrong_item
+  not_as_described
+  changed_mind
+  other
+}
+
+enum SupportStatus {
+  open
+  in_progress
+  resolved
+}
+
+enum SupportPriority {
+  low
+  medium
+  high
+}
+
+model User {
+  id             String          @id
+  email          String          @unique
+  password       String
+  fullName       String
+  name           String?
+  phone          String
+  address        String
+  role           Role            @default(customer)
+  avatar         String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  orders         Order[]
+  reviews        Review[]
+  cart           Cart?
+  returnRequests ReturnRequest[]
+  supportTickets SupportTicket[]
+}
+
+model SupportTicket {
+  id            String          @id
+  customerId    String?
+  customer      User?           @relation(fields: [customerId], references: [id])
+  customerName  String
+  customerEmail String
+  customerPhone String?
+  subject       String
+  message       String          @db.Text
+  status        SupportStatus   @default(open)
+  priority      SupportPriority @default(medium)
+  orderId       String?
+  response      String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model Category {
+  id          String @id
+  name        String
+  slug        String @unique
+  description String
+  bookCount   Int    @default(0)
+  books       Book[]
+}
+
+model Book {
+  id            String   @id
+  title         String
+  author        String
+  price         Int
+  originalPrice Int?
+  description   String   @db.Text
+  coverImage    String
+  category      String
+  categoryId    String?
+  categoryRel   Category? @relation(fields: [categoryId], references: [id])
+  publisher     String
+  publishYear   Int
+  pages         Int
+  language      String
+  isbn          String
+  stock         Int      @default(0)
+  soldCount     Int?
+  rating        Float    @default(0)
+  reviewCount   Int      @default(0)
+  isFeatured    Boolean  @default(false)
+  isNewArrival  Boolean  @default(false)
+  isBestSeller  Boolean  @default(false)
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  reviews       Review[]
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  refunded
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, bookId])
+}
+
+model Order {
+  id              String          @id
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  invoice         Invoice?
+  returnRequests  ReturnRequest[]
+  totalAmount     Int
+  shippingAddress String
+  phone           String
+  paymentMethod   PaymentMethod
+  status          OrderStatus     @default(pending)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model ReturnRequest {
+  id           String       @id
+  orderId      String
+  order        Order        @relation(fields: [orderId], references: [id])
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  status       ReturnStatus @default(pending)
+  reason       ReturnReason
+  description  String       @db.Text
+  adminNote    String?      @db.Text
+  refundAmount Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  items        ReturnItem[]
+}
+
+model ReturnItem {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  bookId          String
+  quantity        Int
+  price           Int
+}
+
+model Invoice {
+  id            String        @id
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId        String
+  subtotal      Int
+  shippingFee   Int
+  discount      Int           @default(0)
+  totalAmount   Int
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(unpaid)
+  buyerName     String
+  buyerEmail    String
+  buyerPhone    String
+  buyerAddress  String
+  note          String?
+  issuedAt      DateTime      @default(now())
+  paidAt        DateTime?
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookId   String
+  book     Book   @relation(fields: [bookId], references: [id])
+  quantity Int
+  price    Int
+}
+
+model Review {
+  id        String   @id
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  userName  String
+  rating    Int
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model InventoryLog {
+  id        String   @id
+  bookId    String
+  type      String
+  quantity  Int
+  note      String
+  createdAt DateTime @default(now())
+  createdBy String
+}
+
+model Promotion {
+  id            String   @id @default(cuid())
+  title         String
+  description   String   @db.Text
+  code          String?  @unique
+  discountType  String
+  discountValue Int
+  minOrder      Int?
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+}
+
+model Article {
+  id          String    @id @default(cuid())
+  title       String
+  slug        String    @unique
+  excerpt     String    @db.Text
+  content     String    @db.Text
+  coverImage  String?
+  authorName  String
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Cấu hình quyền cho role nhân viên (staff)
+model StaffRoleConfig {
+  id          String   @id @default("staff")
+  permissions String[]
+  updatedAt   DateTime @updatedAt
+}
